@@ -624,6 +624,13 @@ export class CMSService implements IDisposeOnExit {
     if (!_.isArray(payloads)) {
       payloads = [payloads]
     }
+    payloads = payloads.map(payload => {
+      if (payload.type !== 'typing') {
+        payload.contentId = contentId
+        payload.elementData = { ...additionalData, ...args }
+      }
+      return payload
+    })
 
     return payloads
   }

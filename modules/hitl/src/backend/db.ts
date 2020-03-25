@@ -152,36 +152,30 @@ export default class HitlDb {
         }
   }
 
-  formatMessage = event => {
+  formatMessage = async event => {
     // Convert messenger payloads to HITL-compatible format
-    if (event.channel === 'messenger' && event.payload.quick_replies) {
+    const payload = { ...event.payload }
+
+    if (event.channel !== 'web' && payload.quick_replies) {
       return {
         type: 'custom',
         raw_message: {
           type: 'custom',
-          module: 'channel-messenger',
+          module: 'channel-web',
           component: 'QuickReplies',
-          quick_replies: event.payload.quick_replies,
-          wrapped: { type: 'text', ..._.omit(event.payload, 'quick_replies') }
+          quick_replies: payload.quick_replies,
+          wrapped: { type: 'text', ..._.omit(payload, 'quick_replies') }
         }
       }
-    } else if (event.channel === 'messenger' && _.get(event.payload, 'attachment.payload.elements')) {
+    }
+    if (event.channel !== 'web' && payload.contentId) {
+      const contentElement = await this.bp.cms.getContentElement(event.botId, payload.contentId.substring(1))
+      const contentTypeRenderer = this.bp.cms.getContentType(contentElement.contentType)
+      payload.elementData.typing = false
+      const raw_message: any = await contentTypeRenderer.renderElement(payload.elementData, 'web')[0]
       return {
-        type: 'carousel',
-        raw_message: {
-          text: ' ',
-          type: 'carousel',
-          elements: _.get(event.payload, 'attachment.payload.elements').map(card => ({
-            title: card.title,
-            picture: card.image_url,
-            subtitle: card.subtitle,
-            buttons: card.buttons.map(a => ({
-              ...a,
-              type: a.type === 'web_url' ? 'open_url' : a.type
-            }))
-          })),
-          fromMessenger: true
-        }
+        type: raw_message.type,
+        raw_message: raw_message
       }
     }
 
@@ -200,14 +194,14 @@ export default class HitlDb {
     const message = {
       session_id: sessionId,
       type: event.type,
-      raw_message: event.payload,
+      raw_message: payload,
       text,
       source,
       direction,
       ts: new Date()
     }
 
-    const { type, raw_message } = this.formatMessage(event)
+    const { type, raw_message } = await this.formatMessage(event)
     message.type = type
     message.raw_message = raw_message
 
